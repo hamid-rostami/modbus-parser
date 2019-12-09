@@ -14,7 +14,7 @@ target_compile_options(base
     -g
     -fno-omit-frame-pointer
     -Wall
-    -Wextra
+    #-Wextra
 )
 
 add_library(modbus-parser

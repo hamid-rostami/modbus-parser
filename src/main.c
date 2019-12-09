@@ -1,3 +1,4 @@
+#include "modbus.h"
 #include <stdio.h>
 
 int

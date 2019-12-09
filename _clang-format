@@ -1,21 +1,4 @@
 BasedOnStyle: Mozilla
-# Language: Cpp
+Language: Cpp
 AlwaysBreakBeforeMultilineStrings: true
 BinPackParameters: false
-BreakBeforeBraces: Custom
-BraceWrapping:
-  AfterClass:      true
-  AfterControlStatement: false
-  AfterEnum:       true
-  AfterFunction:   true
-  AfterNamespace:  false
-  AfterObjCDeclaration: false
-  AfterStruct:     true
-  AfterUnion:      true
-  AfterExternBlock: false  # mrn
-  BeforeCatch:     false
-  BeforeElse:      false
-  IndentBraces:    false
-  SplitEmptyFunction: true
-  SplitEmptyRecord: false
-  SplitEmptyNamespace: true
