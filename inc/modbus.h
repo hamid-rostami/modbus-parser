@@ -54,7 +54,7 @@ struct modbus_parser
   /* TODO: error field */
 
   /* PUBLIC */
-  void* data;
+  void* arg;
 };
 
 struct modbus_parser_settings

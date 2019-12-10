@@ -5,9 +5,9 @@
 void
 modbus_parser_init(modbus_parser* parser, enum modbus_parser_type t)
 {
-  void* data = parser->data; /* preserve application data */
+  void* arg = parser->arg; /* preserve application data */
   memset(parser, 0, sizeof(*parser));
-  parser->data = data;
+  parser->arg = arg;
   parser->type = t;
 }
 
