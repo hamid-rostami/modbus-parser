@@ -22,14 +22,14 @@ enum modbus_parser_type
 };
 
 #define MODBUS_FUNC_MAP(XX)                                                    \
-  XX(1, READ_COIL, Read - Coil)                                                \
-  XX(2, READ_IN_STATUS, Read - Input - Status)                                 \
-  XX(3, READ_HOLD_REG, Read - Holding - Register)                              \
-  XX(4, READ_IN_REG, Read - Input - Register)                                  \
-  XX(5, WRITE_COIL, Wire - Single - Coil)                                      \
-  XX(6, WRITE_REG, Write - Single - Register)                                  \
-  XX(15, WRITE_COILS, Write - Multiple - Coils)                                \
-  XX(16, WRITE_REGS, Write - Miltiple - Registers)
+  XX(1, READ_COILS, "Read Coils")                                              \
+  XX(2, READ_DISCRETE_IN, "Read Discrete Inputs")                              \
+  XX(3, READ_HOLD_REG, "Read Holding Register")                                \
+  XX(4, READ_IN_REG, "Read Input Register")                                    \
+  XX(5, WRITE_COIL, "Wire Single Coil")                                        \
+  XX(6, WRITE_REG, "Write Single Register")                                    \
+  XX(15, WRITE_COILS, "Write Multiple Coils")                                  \
+  XX(16, WRITE_REGS, "Write Miltiple Registers")
 
 enum modbus_func
 {
@@ -38,40 +38,93 @@ enum modbus_func
 #undef XX
 };
 
+/*
+#define MODBUS_ERRNO_MAP(XX)    \
+  XX(CB_slave_addr, "the on_slave_addr callback failed")  \
+  XX(CB_data_len, "the on_data_len callback failed")  \
+  XX(CB_data_start, "the on_data_start callback failed")  \
+  XX(CB_data_end, "the on_data_end callback failed")  \
+  XX(CB_crc_error, "the on_crc_error callback failed")  \
+
+#define XX(n, s) MBERR_##n,
+enum modbus_errno {
+  MODBUS_ERRNO_MAP(XX)
+}
+#undef XX
+*/
+
+enum modbus_parser_state
+{
+  s_slave_addr = 0,
+  s_func,
+  s_len,
+
+  /* For Single reads */
+  s_single_addr_hi,
+  s_single_addr_lo,
+
+  /* For Multiplie reads */
+  s_start_addr_hi,
+  s_start_addr_lo,
+
+  /* Quantity */
+  s_qty_hi,
+  s_qty_lo,
+
+  /* For Single reads */
+  /*
+  s_single_data_hi,
+  s_single_data_lo,
+  */
+
+  /* For Multiple reads */
+  s_data,
+
+  s_crc_hi,
+  s_crc_lo,
+  s_complete
+};
+
 struct modbus_parser
 {
   /* PRIVATE */
   enum modbus_parser_type type;
+  enum modbus_parser_state state;
+  uint8_t data_cnt;
+  uint16_t frame_crc; /* CRC inside frame */
 
   /* READ-ONLY */
   uint8_t slave_addr;
   enum modbus_func function;
-  uint16_t start_addr;
-  uint16_t nreg;
-  uint16_t payload_len;
-  uint8_t* payload;
-  bool crc_error;
-  /* TODO: error field */
+  uint16_t addr;
+  uint16_t qty;
+  uint8_t data_len;
+  const uint8_t* data;
+  // bool crc_error;
+  uint16_t errno;
 
   /* PUBLIC */
-  void* data;
+  void* arg;
 };
 
 struct modbus_parser_settings
 {
-  modbus_cb on_frame_start;
   modbus_cb on_slave_addr;
-  modbus_cb on_byte_count;
-  modbus_cb on_start_data;
-  modbus_cb on_end_data;
+  modbus_cb on_function;
+  modbus_cb on_addr;
+  modbus_cb on_qty;
+  modbus_cb on_data_len;
+  modbus_cb on_data_start;
+  modbus_cb on_data_end;
   modbus_cb on_crc_error;
+  modbus_cb on_complete;
 };
 
 void modbus_parser_init(modbus_parser* parser, enum modbus_parser_type t);
 
 /* Initialize http_parser_settings members to 0
  */
-void mosbus_parser_settings_init(modbus_parser_settings* settings);
+void modbus_parser_settings_init(modbus_parser_settings* settings);
 
 /* Executes the parser. Returns number of parsed bytes
  */
@@ -79,5 +132,7 @@ size_t modbus_parser_execute(modbus_parser* parser,
                              const modbus_parser_settings* settings,
                              const uint8_t* data,
                              size_t len);
+
+const char* modbus_func_str(enum modbus_func f);
 
 #endif
