@@ -26,10 +26,10 @@ target_link_libraries(modbus-parser
     base
 )
 
-add_executable(main
-  src/main.c
+add_executable(tests
+  tests.c
 )
-target_link_libraries(main
+target_link_libraries(tests
   PRIVATE
     base
     modbus-parser
