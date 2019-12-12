@@ -10,6 +10,13 @@
 
 #define UINT16(p) ((*(&p) << 8) + (*(&p + 1)))
 
+#define ADD_CRC(buf)                                                           \
+  do {                                                                         \
+    uint16_t crc = modbus_calc_crc(buf, sizeof(buf) - 2);                      \
+    buf[sizeof(buf) - 1] = crc >> 8;                                           \
+    buf[sizeof(buf) - 2] = crc & 0x00FF;                                       \
+  } while (0)
+
 int
 on_slave_addr(struct modbus_parser* p)
 {
@@ -73,7 +80,7 @@ on_data_end(struct modbus_parser* p)
 int
 on_crc_error(struct modbus_parser* p)
 {
-  printf("CRC Error\n");
+  printf("CRC Error, 0x%04X != 0x%04X\n", p->frame_crc, p->calc_crc);
   return 0;
 }
 
@@ -94,6 +101,7 @@ test_read_coils(struct modbus_parser* parser,
 
   TEST_START();
 
+  ADD_CRC(res);
   modbus_parser_init(parser, MODBUS_RESPONSE);
   n = modbus_parser_execute(parser, settings, res, sizeof(res));
 
@@ -115,6 +123,7 @@ test_read_discrete_in(struct modbus_parser* parser,
 
   TEST_START();
 
+  ADD_CRC(res);
   modbus_parser_init(parser, MODBUS_RESPONSE);
 
   n = modbus_parser_execute(parser, settings, res, sizeof(res));
@@ -141,6 +150,7 @@ test_read_hold_reg(struct modbus_parser* parser,
 
   TEST_START();
 
+  ADD_CRC(res);
   modbus_parser_init(parser, MODBUS_RESPONSE);
 
   /* Parse first 3 bytes */
@@ -167,6 +177,7 @@ test_read_in_reg(struct modbus_parser* parser,
 
   TEST_START();
 
+  ADD_CRC(res);
   modbus_parser_init(parser, MODBUS_RESPONSE);
 
   n = modbus_parser_execute(parser, settings, res, sizeof(res));
@@ -189,6 +200,7 @@ test_write_single_coil(struct modbus_parser* parser,
 
   TEST_START();
 
+  ADD_CRC(res);
   modbus_parser_init(parser, MODBUS_RESPONSE);
 
   n = modbus_parser_execute(parser, settings, res, sizeof(res));
@@ -211,6 +223,7 @@ test_write_single_reg(struct modbus_parser* parser,
 
   TEST_START();
 
+  ADD_CRC(res);
   modbus_parser_init(parser, MODBUS_RESPONSE);
 
   n = modbus_parser_execute(parser, settings, res, sizeof(res));
@@ -233,6 +246,7 @@ test_write_multiple_coil(struct modbus_parser* parser,
 
   TEST_START();
 
+  ADD_CRC(res);
   modbus_parser_init(parser, MODBUS_RESPONSE);
 
   n = modbus_parser_execute(parser, settings, res, sizeof(res));
@@ -256,6 +270,7 @@ test_write_multiple_reg(struct modbus_parser* parser,
 
   TEST_START();
 
+  ADD_CRC(res);
   modbus_parser_init(parser, MODBUS_RESPONSE);
 
   n = modbus_parser_execute(parser, settings, res, sizeof(res));
@@ -265,6 +280,31 @@ test_write_multiple_reg(struct modbus_parser* parser,
   assert(parser->function == res[1]);
   assert(parser->addr == UINT16(res[2]));
   assert(parser->qty == UINT16(res[4]));
+
+  TEST_SUCCESS();
+}
+
+void
+test_crc_error(struct modbus_parser* parser,
+               struct modbus_parser_settings* settings)
+{
+  /* Packet with bad CRC value */
+  uint8_t res[] = { 0x11, MODBUS_FUNC_WRITE_REGS, 0x00, 0x01, 0x01, 0x02, 0x12,
+                    0x34 };
+  size_t n;
+
+  TEST_START();
+
+  modbus_parser_init(parser, MODBUS_RESPONSE);
+
+  n = modbus_parser_execute(parser, settings, res, sizeof(res));
+
+  assert(n == sizeof(res));
+  assert(parser->slave_addr == res[0]);
+  assert(parser->function == res[1]);
+  assert(parser->addr == UINT16(res[2]));
+  assert(parser->qty == UINT16(res[4]));
+  assert(parser->errno != 0); /* TODO: check error value */
 
   TEST_SUCCESS();
 }
@@ -297,5 +337,19 @@ main(void)
   test_write_single_reg(&parser, &settings);
   test_write_multiple_coil(&parser, &settings);
   test_write_multiple_reg(&parser, &settings);
+  test_crc_error(&parser, &settings);
+
+  /*
+  uint8_t data[] = { 0x11, MODBUS_FUNC_WRITE_REGS, 0x00, 0x01, 0x01, 0x02, 0x00,
+                    0x00 };
+  uint16_t crc = modbus_calc_crc(data, 6);
+  printf("CRC: %04X\n", crc);
+
+  crc = 0xFFFF;
+  for (int i=0; i<6; i++) {
+    modbus_crc_update(&crc, data[i]);
+  }
+  printf("CRC: %04X\n", crc);
+  */
   return 0;
 }
