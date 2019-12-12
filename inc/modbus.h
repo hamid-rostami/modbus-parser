@@ -80,8 +80,11 @@ enum modbus_parser_state
   /* For Multiple reads */
   s_data,
 
-  s_crc_hi,
+  /* NOTE: Don't edit order of these three elements,
+   * It's important for updating CRC (inside parser state machine)
+   */
   s_crc_lo,
+  s_crc_hi,
   s_complete
 };
 
@@ -91,7 +94,9 @@ struct modbus_parser
   enum modbus_parser_type type;
   enum modbus_parser_state state;
   uint8_t data_cnt;
+  uint8_t frame_start;
   uint16_t frame_crc; /* CRC inside frame */
+  uint16_t calc_crc;  /* Calculated CRC */
 
   /* READ-ONLY */
   uint8_t slave_addr;
@@ -134,5 +139,13 @@ size_t modbus_parser_execute(modbus_parser* parser,
                              size_t len);
 
 const char* modbus_func_str(enum modbus_func f);
+
+/* Calculate CRC from array of bytes */
+uint16_t modbus_calc_crc(const uint8_t* data, size_t sz);
+
+/* Update CRC with single byte, useful for calculating
+ * CRC from streming bytes
+ */
+void modbus_crc_update(uint16_t* crc, uint8_t data);
 
 #endif
