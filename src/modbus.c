@@ -60,6 +60,12 @@ modbus_parser_settings_init(modbus_parser_settings* settings)
   memset(settings, 0, sizeof(*settings));
 }
 
+void
+modbus_query_init(struct modbus_query* q)
+{
+  memset(q, 0, sizeof(*q));
+}
+
 const char*
 modbus_func_str(enum modbus_func f)
 {
@@ -153,7 +159,7 @@ parse_response(modbus_parser* parser,
         break;
 
       case s_func:
-        parser->function = *data;
+        parser->function = (enum modbus_func) * data;
         switch (parser->function) {
           case MODBUS_FUNC_READ_COILS:
           case MODBUS_FUNC_READ_DISCRETE_IN:
@@ -270,12 +276,124 @@ modbus_parser_execute(modbus_parser* parser,
   switch (parser->type) {
     case MODBUS_QUERY:
       return parse_query(parser, settings, data, len);
-      break;
 
     case MODBUS_RESPONSE:
       return parse_response(parser, settings, data, len);
-      break;
   }
 
   return 0;
+}
+
+/* Concatenate memory to Modbus Query */
+#define MBQ_CAT_MEM(data, len)                                                 \
+  do {                                                                         \
+    nwrite += len;                                                             \
+    if (nwrite > sz) {                                                         \
+      return -1;                                                               \
+    } else {                                                                   \
+      memcpy(buf, data, len);                                                  \
+      buf += len;                                                              \
+    }                                                                          \
+  } while (0)
+
+/* Concatenate single byte to Modbus Query */
+#define MBQ_CAT_BYTE(b)                                                        \
+  nwrite++;                                                                    \
+  do {                                                                         \
+    if (nwrite > sz) {                                                         \
+      return -1;                                                               \
+    } else {                                                                   \
+      *buf = b;                                                                \
+      buf++;                                                                   \
+    }                                                                          \
+  } while (0);
+
+/* Concatenate uint16_t as big-endian to modbus query.
+ * Modbus uses big-endian for address and data items, except CRC
+ */
+#define MBQ_CAT_WORD(i)                                                        \
+  do {                                                                         \
+    nwrite += 2;                                                               \
+    if (nwrite > sz) {                                                         \
+      return -1;                                                               \
+    } else {                                                                   \
+      *buf++ = i >> 8;                                                         \
+      *buf++ = i & 0x00FF;                                                     \
+    }                                                                          \
+  } while (0)
+
+int
+modbus_gen_query(struct modbus_query* q, uint8_t* buf, size_t sz)
+{
+  int nwrite = 0;
+  uint16_t crc;
+  uint8_t* buf_start = buf;
+
+  MBQ_CAT_BYTE(q->slave_addr);
+  MBQ_CAT_BYTE(q->function);
+
+  switch (q->function) {
+    case MODBUS_FUNC_READ_COILS:
+    case MODBUS_FUNC_READ_DISCRETE_IN:
+    case MODBUS_FUNC_READ_HOLD_REG:
+    case MODBUS_FUNC_READ_IN_REG:
+      MBQ_CAT_WORD(q->addr);
+      MBQ_CAT_WORD(q->qty);
+      break;
+
+    case MODBUS_FUNC_WRITE_COIL:
+    case MODBUS_FUNC_WRITE_REG:
+      MBQ_CAT_WORD(q->addr);
+      /* Check input data */
+      if (q->data == NULL || q->data_len != 1)
+        return -1;
+
+      // MBQ_CAT_MEM(q->data, q->data_len);
+      MBQ_CAT_WORD(*q->data);
+      break;
+
+    case MODBUS_FUNC_WRITE_COILS: {
+      int16_t nbyte = MODBUS_COILS_BYTE_LEN(q->qty);
+      /* Check input data */
+      if (q->data == NULL || q->data_len == 0)
+        return -1;
+
+      MBQ_CAT_WORD(q->addr);
+      MBQ_CAT_WORD(q->qty);
+      MBQ_CAT_BYTE(nbyte);
+
+      while (nbyte > 0) {
+        nbyte -= 2;
+        if (nbyte >= 0) {
+          MBQ_CAT_WORD(*q->data);
+        } else {
+          /* Write last byte, MSB of last register */
+          MBQ_CAT_BYTE(*q->data);
+        }
+        q->data++;
+      }
+      break;
+    }
+
+    case MODBUS_FUNC_WRITE_REGS:
+      /* Check input data */
+      if (q->data == NULL || q->data_len == 0)
+        return -1;
+
+      MBQ_CAT_WORD(q->addr);
+      MBQ_CAT_WORD(q->qty);
+      MBQ_CAT_BYTE(q->data_len * 2);
+
+      for (int i = 0; i < q->data_len; i++) {
+        MBQ_CAT_WORD(*(q->data + i));
+      }
+      break;
+  }
+
+  crc = modbus_calc_crc(buf_start, nwrite);
+  /* CRC must be represent as little-endian */
+  MBQ_CAT_BYTE(crc & 0x00FF);
+  MBQ_CAT_BYTE(crc >> 8);
+
+  return nwrite;
 }
