@@ -1,6 +1,7 @@
 #include "modbus.h"
 #include <assert.h>
 #include <stdio.h>
+#include <string.h>
 
 #define TEST_START() printf("<< %s STARTED >>\n", __func__)
 #define TEST_SUCCESS() printf("** %s SUCCESS **\n\n", __func__)
@@ -15,6 +16,33 @@
     uint16_t crc = modbus_calc_crc(buf, sizeof(buf) - 2);                      \
     buf[sizeof(buf) - 1] = crc >> 8;                                           \
     buf[sizeof(buf) - 2] = crc & 0x00FF;                                       \
+  } while (0)
+
+#define VAR_DUMP(buf, sz)                                                      \
+  do {                                                                         \
+    int _n = 0;                                                                \
+    for (int i = 0; i < sz; i++) {                                             \
+      _n += printf("%02X ", buf[i]);                                           \
+      if (_n > 70) {                                                           \
+        _n = 0;                                                                \
+        printf("\n");                                                          \
+      }                                                                        \
+    }                                                                          \
+    printf("\n");                                                              \
+  } while (0)
+
+#define ASSERT_WORD(buf, w)                                                    \
+  do {                                                                         \
+    assert(*buf == (w >> 8));                                                  \
+    assert(*(buf + 1) == (w & 0x00FF));                                        \
+  } while (0)
+
+#define ASSERT_QUERY_CRC(buf, len)                                             \
+  do {                                                                         \
+    uint16_t crc;                                                              \
+    crc = modbus_calc_crc(buf, len - 2);                                       \
+    assert(buf[len - 2] == (crc & 0x00FF));                                    \
+    assert(buf[len - 1] == (crc >> 8));                                        \
   } while (0)
 
 int
@@ -309,6 +337,289 @@ test_crc_error(struct modbus_parser* parser,
   TEST_SUCCESS();
 }
 
+void
+test_gen_read_coils(void)
+{
+  struct modbus_query q = {.slave_addr = 0x12,
+                           .function = MODBUS_FUNC_READ_COILS,
+                           .addr = 0x11,
+                           .qty = 5 };
+  uint8_t buf[10];
+  int n;
+  // uint16_t crc;
+
+  TEST_START();
+
+  /* Check buffer size error. length of output stream is 8 bytes,
+   * but we gave 7 bytes.
+   */
+  n = modbus_gen_query(&q, buf, 7);
+  assert(n == -1);
+
+  n = modbus_gen_query(&q, buf, sizeof(buf));
+
+  printf("Query:\n");
+  VAR_DUMP(buf, n);
+
+  assert(n > 0);
+  assert(buf[0] == q.slave_addr);
+  assert(buf[1] == q.function);
+  ASSERT_WORD(&buf[2], q.addr);
+  ASSERT_WORD(&buf[4], q.qty);
+  ASSERT_QUERY_CRC(buf, n);
+
+  TEST_SUCCESS();
+}
+
+void
+test_gen_discrete_input(void)
+{
+  struct modbus_query q = {.slave_addr = 0x12,
+                           .function = MODBUS_FUNC_READ_DISCRETE_IN,
+                           .addr = 0x11,
+                           .qty = 5 };
+  uint8_t buf[10];
+  int n;
+
+  TEST_START();
+
+  memset(buf, 0, sizeof(buf));
+
+  n = modbus_gen_query(&q, buf, sizeof(buf));
+
+  printf("Query:\n");
+  VAR_DUMP(buf, n);
+
+  assert(n > 0);
+  assert(buf[0] == q.slave_addr);
+  assert(buf[1] == q.function);
+  ASSERT_WORD(&buf[2], q.addr);
+  ASSERT_WORD(&buf[4], q.qty);
+  ASSERT_QUERY_CRC(buf, n);
+
+  TEST_SUCCESS();
+}
+
+void
+test_gen_read_hold_reg(void)
+{
+  struct modbus_query q = {.slave_addr = 0x23,
+                           .function = MODBUS_FUNC_READ_HOLD_REG,
+                           .addr = 0x45,
+                           .qty = 0x1234 };
+  uint8_t buf[10];
+  int n;
+
+  TEST_START();
+
+  memset(buf, 0, sizeof(buf));
+
+  n = modbus_gen_query(&q, buf, sizeof(buf));
+
+  printf("Query:\n");
+  VAR_DUMP(buf, n);
+
+  assert(n > 0);
+  assert(buf[0] == q.slave_addr);
+  assert(buf[1] == q.function);
+  ASSERT_WORD(&buf[2], q.addr);
+  ASSERT_WORD(&buf[4], q.qty);
+  ASSERT_QUERY_CRC(buf, n);
+
+  TEST_SUCCESS();
+}
+
+void
+test_gen_read_input_reg(void)
+{
+  struct modbus_query q = {.slave_addr = 0x45,
+                           .function = MODBUS_FUNC_READ_IN_REG,
+                           .addr = 0x56,
+                           .qty = 0x78 };
+  uint8_t buf[10];
+  int n;
+
+  TEST_START();
+
+  memset(buf, 0, sizeof(buf));
+
+  n = modbus_gen_query(&q, buf, sizeof(buf));
+
+  printf("Query:\n");
+  VAR_DUMP(buf, n);
+
+  assert(n > 0);
+  assert(buf[0] == q.slave_addr);
+  assert(buf[1] == q.function);
+  ASSERT_WORD(&buf[2], q.addr);
+  ASSERT_WORD(&buf[4], q.qty);
+  ASSERT_QUERY_CRC(buf, n);
+
+  TEST_SUCCESS();
+}
+
+void
+test_gen_write_single_coil(void)
+{
+  uint16_t data = MODBUS_COIL_HIGH;
+
+  struct modbus_query q = {.slave_addr = 0x45,
+                           .function = MODBUS_FUNC_WRITE_COIL,
+                           .addr = 0x78,
+                           .data = &data,
+                           .data_len = 1 };
+  uint8_t buf[10];
+  int n;
+
+  TEST_START();
+
+  memset(buf, 0, sizeof(buf));
+
+  n = modbus_gen_query(&q, buf, sizeof(buf));
+
+  printf("Query:\n");
+  VAR_DUMP(buf, n);
+
+  assert(n > 0);
+  assert(buf[0] == q.slave_addr);
+  assert(buf[1] == q.function);
+  ASSERT_WORD(&buf[2], q.addr);
+  ASSERT_QUERY_CRC(buf, n);
+
+  TEST_SUCCESS();
+}
+
+void
+test_gen_write_single_reg(void)
+{
+  uint16_t data = 0xABCD;
+
+  struct modbus_query q = {.slave_addr = 0x45,
+                           .function = MODBUS_FUNC_WRITE_COIL,
+                           .addr = 0x78,
+                           .data = &data,
+                           .data_len = 1 };
+  uint8_t buf[10];
+  int n;
+
+  TEST_START();
+
+  memset(buf, 0, sizeof(buf));
+
+  n = modbus_gen_query(&q, buf, sizeof(buf));
+
+  printf("Query:\n");
+  VAR_DUMP(buf, n);
+
+  assert(n > 0);
+  assert(buf[0] == q.slave_addr);
+  assert(buf[1] == q.function);
+  ASSERT_WORD(&buf[2], q.addr);
+  ASSERT_QUERY_CRC(buf, n);
+
+  TEST_SUCCESS();
+}
+
+void
+test_gen_write_multiple_coil(void)
+{
+  uint16_t data = 0b0101010100001111;
+
+  struct modbus_query q = {.slave_addr = 0x45,
+                           .function = MODBUS_FUNC_WRITE_COILS,
+                           .addr = 0x78,
+                           .qty = 16,
+                           .data = &data,
+                           .data_len = 1 };
+  uint8_t buf[15];
+  int n;
+
+  TEST_START();
+
+  memset(buf, 0, sizeof(buf));
+
+  n = modbus_gen_query(&q, buf, sizeof(buf));
+
+  printf("Query:\n");
+  VAR_DUMP(buf, n);
+
+  assert(n > 0);
+  assert(buf[0] == q.slave_addr);
+  assert(buf[1] == q.function);
+  ASSERT_WORD(&buf[2], q.addr);
+  ASSERT_WORD(&buf[4], q.qty);
+  assert(buf[6] == 2);
+  ASSERT_QUERY_CRC(buf, n);
+
+  TEST_SUCCESS();
+}
+
+void
+test_gen_write_multiple_coil_2(void)
+{
+  uint16_t data[] = { 0b1111000011110000, 0b0000000001110000 };
+
+  struct modbus_query q = {.slave_addr = 0x45,
+                           .function = MODBUS_FUNC_WRITE_COILS,
+                           .addr = 0x78,
+                           .qty = 23,
+                           .data = data,
+                           .data_len = 2 };
+  uint8_t buf[15];
+  int n;
+
+  TEST_START();
+
+  memset(buf, 0, sizeof(buf));
+
+  n = modbus_gen_query(&q, buf, sizeof(buf));
+
+  printf("Query:\n");
+  VAR_DUMP(buf, n);
+
+  assert(n > 0);
+  assert(buf[0] == q.slave_addr);
+  assert(buf[1] == q.function);
+  ASSERT_WORD(&buf[2], q.addr);
+  ASSERT_WORD(&buf[4], q.qty);
+  assert(buf[6] == 3);
+  ASSERT_QUERY_CRC(buf, n);
+
+  TEST_SUCCESS();
+}
+
+void
+test_gen_write_multiple_reg(void)
+{
+  uint16_t data[] = { 0xAB, 0xCD, 0xEF };
+
+  struct modbus_query q = {.slave_addr = 0x45,
+                           .function = MODBUS_FUNC_WRITE_REGS,
+                           .addr = 0x78,
+                           .qty = 3,
+                           .data = data,
+                           .data_len = 3 };
+  uint8_t buf[20];
+  int n;
+
+  TEST_START();
+
+  memset(buf, 0, sizeof(buf));
+
+  n = modbus_gen_query(&q, buf, sizeof(buf));
+
+  printf("Query:\n");
+  VAR_DUMP(buf, n);
+
+  assert(n > 0);
+  assert(buf[0] == q.slave_addr);
+  assert(buf[1] == q.function);
+  ASSERT_WORD(&buf[2], q.addr);
+  ASSERT_QUERY_CRC(buf, n);
+
+  TEST_SUCCESS();
+}
+
 int
 main(void)
 {
@@ -329,6 +640,7 @@ main(void)
   settings.on_crc_error = on_crc_error;
   settings.on_complete = on_complete;
 
+  /* Test response parser */
   test_read_coils(&parser, &settings);
   test_read_discrete_in(&parser, &settings);
   test_read_hold_reg(&parser, &settings);
@@ -339,17 +651,15 @@ main(void)
   test_write_multiple_reg(&parser, &settings);
   test_crc_error(&parser, &settings);
 
-  /*
-  uint8_t data[] = { 0x11, MODBUS_FUNC_WRITE_REGS, 0x00, 0x01, 0x01, 0x02, 0x00,
-                    0x00 };
-  uint16_t crc = modbus_calc_crc(data, 6);
-  printf("CRC: %04X\n", crc);
-
-  crc = 0xFFFF;
-  for (int i=0; i<6; i++) {
-    modbus_crc_update(&crc, data[i]);
-  }
-  printf("CRC: %04X\n", crc);
-  */
+  /* Test generator */
+  test_gen_read_coils();
+  test_gen_discrete_input();
+  test_gen_read_hold_reg();
+  test_gen_read_input_reg();
+  test_gen_write_single_coil();
+  test_gen_write_single_reg();
+  test_gen_write_multiple_coil();
+  test_gen_write_multiple_coil_2();
+  test_gen_write_multiple_reg();
   return 0;
 }

@@ -9,6 +9,11 @@
 #define MODBUS_PARSER_VERSION_MINOR 1
 #define MODBUS_PARSER_VERSION_PATCH 0
 
+#define MODBUS_COIL_HIGH 0xFF00
+#define MODBUS_COIL_LOW 0x0000
+
+#define MODBUS_COILS_BYTE_LEN(qty) ((qty / 8) + ((qty % 8) > 0))
+
 typedef struct modbus_parser modbus_parser;
 typedef struct modbus_parser_settings modbus_parser_settings;
 
@@ -125,6 +130,32 @@ struct modbus_parser_settings
   modbus_cb on_complete;
 };
 
+struct modbus_query
+{
+  uint8_t slave_addr;
+  enum modbus_func function;
+
+  /* Address of register or coil. For MULTIPLE commands act as
+   * Starting-Address
+   */
+  uint16_t addr;
+
+  /* Quantity of registers or coils for MULTIPLE commands */
+  uint16_t qty;
+
+  /* Pointer to data to send.
+   * For MODBUS_FUNC_WRITE_COILS command, least significant bit
+   * addressing the lowest coil.
+   */
+  uint16_t* data;
+
+  /* Length of data
+   * NOTE: Don't get confused with byte-count. byte-count will calculate
+   * with generator function.
+   */
+  uint8_t data_len;
+};
+
 void modbus_parser_init(modbus_parser* parser, enum modbus_parser_type t);
 
 /* Initialize http_parser_settings members to 0
@@ -137,6 +168,13 @@ size_t modbus_parser_execute(modbus_parser* parser,
                              const modbus_parser_settings* settings,
                              const uint8_t* data,
                              size_t len);
+
+/* Generate ready-to-send query and place it to buf array.
+ * In success, return size of encoded message, otherwise return negative value
+ */
+int modbus_gen_query(struct modbus_query* q, uint8_t* buf, size_t sz);
+
+void modbus_query_init(struct modbus_query* q);
 
 const char* modbus_func_str(enum modbus_func f);
 
