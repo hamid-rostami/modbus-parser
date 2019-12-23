@@ -338,6 +338,38 @@ test_crc_error(struct modbus_parser* parser,
 }
 
 void
+test_bad_len(struct modbus_parser* parser,
+                        struct modbus_parser_settings* settings)
+{
+  uint8_t res[50] = { 0x11, MODBUS_FUNC_WRITE_REGS, 0x00, 0x01, 0x01, 0x02, 0x00,
+                    0x00 };
+  size_t n;
+  uint16_t crc = modbus_calc_crc(res, 6);
+
+  /* Add CRC */
+  res[7] = crc >> 8;
+  res[6] = crc & 0x00FF;
+
+  TEST_START();
+
+  ADD_CRC(res);
+  modbus_parser_init(parser, MODBUS_RESPONSE);
+
+  n = modbus_parser_execute(parser, settings, res, sizeof(res));
+
+  printf("------------------\n");
+  printf("n = %ld\n", n);
+  assert(n == 8);
+  assert(parser->slave_addr == res[0]);
+  assert(parser->function == res[1]);
+  assert(parser->addr == UINT16(res[2]));
+  assert(parser->qty == UINT16(res[4]));
+
+  TEST_SUCCESS();
+}
+
+
+void
 test_gen_read_coils(void)
 {
   struct modbus_query q = {.slave_addr = 0x12,
@@ -650,6 +682,7 @@ main(void)
   test_write_multiple_coil(&parser, &settings);
   test_write_multiple_reg(&parser, &settings);
   test_crc_error(&parser, &settings);
+  test_bad_len(&parser, &settings);
 
   /* Test generator */
   test_gen_read_coils();
