@@ -358,8 +358,6 @@ test_bad_len(struct modbus_parser* parser,
 
   n = modbus_parser_execute(parser, settings, res, sizeof(res));
 
-  printf("------------------\n");
-  printf("n = %ld\n", n);
   assert(n == 8);
   assert(parser->slave_addr == res[0]);
   assert(parser->function == res[1]);
