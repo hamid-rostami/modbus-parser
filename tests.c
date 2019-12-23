@@ -626,7 +626,6 @@ test_gen_write_multiple_reg(void)
   struct modbus_query q = {.slave_addr = 0x45,
                            .function = MODBUS_FUNC_WRITE_REGS,
                            .addr = 0x78,
-                           .qty = 3,
                            .data = data,
                            .data_len = 3 };
   uint8_t buf[20];
