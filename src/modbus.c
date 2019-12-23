@@ -254,7 +254,7 @@ parse_response(modbus_parser* parser,
       } break;
 
       case s_complete:
-        return 0;
+        return nparsed;
 
       default:
         return 0;
