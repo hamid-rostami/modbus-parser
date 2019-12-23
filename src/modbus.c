@@ -381,7 +381,7 @@ modbus_gen_query(struct modbus_query* q, uint8_t* buf, size_t sz)
         return -1;
 
       MBQ_CAT_WORD(q->addr);
-      MBQ_CAT_WORD(q->qty);
+      MBQ_CAT_WORD(q->data_len);
       MBQ_CAT_BYTE(q->data_len * 2);
 
       for (int i = 0; i < q->data_len; i++) {
