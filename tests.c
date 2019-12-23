@@ -339,10 +339,11 @@ test_crc_error(struct modbus_parser* parser,
 
 void
 test_bad_len(struct modbus_parser* parser,
-                        struct modbus_parser_settings* settings)
+             struct modbus_parser_settings* settings)
 {
-  uint8_t res[50] = { 0x11, MODBUS_FUNC_WRITE_REGS, 0x00, 0x01, 0x01, 0x02, 0x00,
-                    0x00 };
+  uint8_t res[50] = {
+    0x11, MODBUS_FUNC_WRITE_REGS, 0x00, 0x01, 0x01, 0x02, 0x00, 0x00
+  };
   size_t n;
   uint16_t crc = modbus_calc_crc(res, 6);
 
@@ -367,7 +368,6 @@ test_bad_len(struct modbus_parser* parser,
 
   TEST_SUCCESS();
 }
-
 
 void
 test_gen_read_coils(void)
